@@ -214,6 +214,44 @@ export function registerTools(server: McpServer): void {
       const args = ["node", "create", type, "--parent", parent];
       if (name) args.push("--name", name);
       const output = await withAutoSetup(() => runCli(...args));
+
+      // Extract created node path from output (format: "Created: /path (type)")
+      const pathMatch = output.match(/Created:\s+(\S+)/);
+      if (pathMatch) {
+        const nodePath = pathMatch[1];
+
+        // Auto-place: position to the right of siblings
+        try {
+          await runCli("exec", `
+n = op('${nodePath}')
+parent = n.parent()
+siblings = [c for c in parent.children if c.name != n.name]
+if siblings:
+    max_x = max(c.nodeX for c in siblings)
+    max_y = min(c.nodeY for c in siblings if c.nodeX == max_x)
+    n.nodeX = max_x + 200
+    n.nodeY = max_y
+else:
+    n.nodeX = 0
+    n.nodeY = 0
+result["output"] = "placed"
+`);
+        } catch {}
+
+        // Auto-display: activate viewer for output-type nodes
+        const displayTypes = ["renderTOP", "compositeTOP", "outTOP", "nullTOP", "geometryCOMP"];
+        if (displayTypes.some(t => type.toLowerCase() === t.toLowerCase())) {
+          try {
+            await runCli("exec", `
+n = op('${nodePath}')
+n.display = True
+n.viewer = True
+result["output"] = "display on"
+`);
+          } catch {}
+        }
+      }
+
       return textResult(output);
     }
   );
@@ -358,6 +396,77 @@ export function registerTools(server: McpServer): void {
     },
     async ({ script }) => {
       const output = await withAutoSetup(() => runCli("exec", script));
+      return textResult(output);
+    }
+  );
+
+  server.registerTool(
+    "td_screenshot",
+    {
+      title: "Screenshot TOP Output",
+      description:
+        "Takes a screenshot of a TOP node's rendered output and returns it as an image. " +
+        "Use this to see what a render, composite, or any TOP is producing. " +
+        "Only works on TOP-family nodes (textures/images).",
+      inputSchema: {
+        path: z.string().describe("Path to a TOP node, e.g. '/project1/render1'"),
+      },
+    },
+    async ({ path }) => {
+      const tmpFile = `/tmp/td_screenshot_${Date.now()}.png`;
+      await withAutoSetup(() => runCli("exec", `
+import os
+top = op('${path}')
+if top is None:
+    raise ValueError('Node not found: ${path}')
+if top.family != 'TOP':
+    raise ValueError('Not a TOP node: ${path} (family: ' + top.family + ')')
+top.save('${tmpFile}')
+result["output"] = "saved"
+`));
+
+      try {
+        const data = readFileSync(tmpFile);
+        const { unlinkSync } = await import("node:fs");
+        unlinkSync(tmpFile);
+        return {
+          content: [{
+            type: "image" as const,
+            data: data.toString("base64"),
+            mimeType: "image/png",
+          }],
+        };
+      } catch {
+        return textResult(`Screenshot saved but could not read file. Check if ${path} is a valid TOP with output.`);
+      }
+    }
+  );
+
+  server.registerTool(
+    "td_logs",
+    {
+      title: "Get TouchDesigner Logs",
+      description:
+        "Returns errors and warnings from all nodes in the current project. " +
+        "Use this to debug issues instead of asking the user for screenshots of error dialogs.",
+    },
+    async () => {
+      const output = await withAutoSetup(() => runCli("exec", `
+errors = []
+for node in op('/project1').findChildren(depth=10):
+    node_errors = node.errors()
+    node_warnings = node.warnings()
+    if node_errors:
+        for e in node_errors:
+            errors.append(f"ERROR {node.path}: {e}")
+    if node_warnings:
+        for w in node_warnings:
+            errors.append(f"WARN  {node.path}: {w}")
+if errors:
+    result["output"] = chr(10).join(errors)
+else:
+    result["output"] = "No errors or warnings."
+`));
       return textResult(output);
     }
   );
