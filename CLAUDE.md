@@ -21,7 +21,7 @@ Three files, single responsibility each:
 
 - **`src/index.ts`** — Entry point. Creates `McpServer`, registers tools, connects `StdioServerTransport`.
 - **`src/cli.ts`** — CLI lifecycle. `ensureCli()` checks for the global `td` command, auto-installs if missing; `runCli()` shells out to `td <args>`. Uses in-memory promise cache to prevent concurrent installs.
-- **`src/tools.ts`** — Registers 14 MCP tools. `td_open` opens TouchDesigner. 11 tools build CLI args from validated Zod input and call `runCli()` wrapped in `withAutoSetup()` for automatic setup on connection failure. 2 doc tools (`td_doc_search`, `td_doc_read`) read operator markdown files directly from the `docs/` folder without using the CLI.
+- **`src/tools.ts`** — Registers 17 MCP tools. `td_open` opens TouchDesigner. `td_project_create` creates new projects from the patched template. `td_screenshot` captures TOP output as images. `td_logs` scans for errors/warnings. 11 tools build CLI args from validated Zod input and call `runCli()` wrapped in `withAutoSetup()` for automatic setup on connection failure. 2 doc tools (`td_doc_search`, `td_doc_read`) read operator markdown files directly from the `docs/` folder without using the CLI.
 
 ## Key Design Decisions
 
@@ -31,3 +31,4 @@ Three files, single responsibility each:
 - Regular CLI calls get 15s timeout; install gets 120s.
 - No build step — Bun runs `.ts` directly, matching the CLI's approach.
 - Operator docs live in `docs/<FAMILY>/*.md` (e.g. `docs/TOP/Noise_TOP.md`). The doc tools scan these directly via `node:fs` — no CLI dependency. If the docs folder is missing or empty, the tools return a helpful message instead of crashing.
+- `td_node_create` auto-places nodes (200px right of rightmost sibling) and auto-activates display/viewer on output-type nodes (renderTOP, compositeTOP, outTOP, nullTOP, geometryCOMP).
