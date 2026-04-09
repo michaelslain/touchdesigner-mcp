@@ -1,14 +1,125 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { runCli, injectServer } from "./cli.js";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 
 function textResult(output: string) {
   return { content: [{ type: "text" as const, text: output }] };
 }
 
+async function withAutoSetup(fn: () => Promise<string>): Promise<string> {
+  try {
+    return await fn();
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (!msg.includes("Cannot connect") && !msg.includes("timed out") && !msg.includes("ECONNREFUSED")) {
+      throw err;
+    }
+    // Connection failed — try auto-setup
+    await runCli("setup");
+    await injectServer();
+    // Retry with backoff — TD may need time to load
+    for (let i = 0; i < 5; i++) {
+      await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+      try {
+        return await fn();
+      } catch {
+        // keep retrying
+      }
+    }
+    throw new Error(
+      "Cannot connect to TouchDesigner after setup. Make sure TD is running with a project that has the CLI server loaded."
+    );
+  }
+}
+
 export function registerTools(server: McpServer): void {
+  server.registerTool(
+    "td_open",
+    {
+      title: "Open TouchDesigner",
+      description: "Opens TouchDesigner application. Optionally opens a specific .toe project file.",
+      inputSchema: {
+        project: z.string().optional().describe("Path to a .toe project file to open"),
+      },
+    },
+    async ({ project }) => {
+      const { execFile } = await import("node:child_process");
+      const args = ["-a", "TouchDesigner"];
+      if (project) args.push(project);
+      await new Promise<void>((resolve, reject) => {
+        execFile("open", args, { timeout: 10000 }, (err) => {
+          if (err) reject(new Error(err.message));
+          else resolve();
+        });
+      });
+      return textResult(project ? `Opened TouchDesigner with ${project}` : "Opened TouchDesigner");
+    }
+  );
+
+  server.registerTool(
+    "td_project_create",
+    {
+      title: "Create TouchDesigner Project",
+      description:
+        "Creates a new TouchDesigner .toe project file at the specified path and opens it. " +
+        "The project is pre-configured with the CLI server script so tools work immediately. " +
+        "Run td_setup first if you haven't already.",
+      inputSchema: {
+        path: z.string().describe("Full path for the new .toe file, e.g. '/Users/me/Desktop/myproject.toe'"),
+      },
+    },
+    async ({ path: projectPath }) => {
+      // Ensure setup has been run
+      await runCli("setup");
+
+      // Find the patched template
+      const templateDir = "/Applications/TouchDesigner.app/Contents/Resources/tfs/Samples/Setup/Base";
+      const templatePath = join(templateDir, "NewProject.toe");
+      if (!existsSync(templatePath)) {
+        return textResult("Could not find TD template. Is TouchDesigner installed?");
+      }
+
+      // Ensure .toe extension
+      const dest = projectPath.endsWith(".toe") ? projectPath : projectPath + ".toe";
+
+      if (existsSync(dest)) {
+        return textResult(`Project already exists at ${dest}. Use td_open to open it.`);
+      }
+
+      // Copy patched template to new location
+      copyFileSync(templatePath, dest);
+
+      // Open it in TD
+      const { execFile } = await import("node:child_process");
+      await new Promise<void>((resolve, reject) => {
+        execFile("open", ["-a", "TouchDesigner", dest], { timeout: 10000 }, (err) => {
+          if (err) reject(new Error(err.message));
+          else resolve();
+        });
+      });
+
+      // Wait for the server to come online
+      const { connect } = await import("node:net");
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const up = await new Promise<boolean>((resolve) => {
+          const sock = connect({ host: "127.0.0.1", port: 9005 }, () => {
+            sock.end();
+            resolve(true);
+          });
+          sock.on("error", () => resolve(false));
+          sock.setTimeout(1000, () => { sock.destroy(); resolve(false); });
+        });
+        if (up) return textResult(`Created and opened project: ${dest}\nServer connected on port 9005.`);
+      }
+
+      return textResult(`Created and opened project: ${dest}\nWarning: server did not come online within 20s.`);
+    }
+  );
+
   server.registerTool(
     "td_setup",
     {
@@ -55,7 +166,7 @@ export function registerTools(server: McpServer): void {
         "and operating system. Use this to verify the connection to TD is working.",
     },
     async () => {
-      const output = await runCli("info");
+      const output = await withAutoSetup(() => runCli("info"));
       return textResult(output);
     }
   );
@@ -75,7 +186,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ path }) => {
-      const output = await runCli("node", "list", path);
+      const output = await withAutoSetup(() => runCli("node", "list", path));
       return textResult(output);
     }
   );
@@ -102,7 +213,7 @@ export function registerTools(server: McpServer): void {
     async ({ type, parent, name }) => {
       const args = ["node", "create", type, "--parent", parent];
       if (name) args.push("--name", name);
-      const output = await runCli(...args);
+      const output = await withAutoSetup(() => runCli(...args));
       return textResult(output);
     }
   );
@@ -119,7 +230,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ path }) => {
-      const output = await runCli("node", "delete", path);
+      const output = await withAutoSetup(() => runCli("node", "delete", path));
       return textResult(output);
     }
   );
@@ -140,7 +251,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ source, target }) => {
-      const output = await runCli("node", "connect", source, target);
+      const output = await withAutoSetup(() => runCli("node", "connect", source, target));
       return textResult(output);
     }
   );
@@ -157,7 +268,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ source, target }) => {
-      const output = await runCli("node", "disconnect", source, target);
+      const output = await withAutoSetup(() => runCli("node", "disconnect", source, target));
       return textResult(output);
     }
   );
@@ -175,7 +286,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ path }) => {
-      const output = await runCli("node", "errors", path);
+      const output = await withAutoSetup(() => runCli("node", "errors", path));
       return textResult(output);
     }
   );
@@ -200,7 +311,7 @@ export function registerTools(server: McpServer): void {
     async ({ path, param }) => {
       const args = ["param", "get", path];
       if (param) args.push(param);
-      const output = await runCli(...args);
+      const output = await withAutoSetup(() => runCli(...args));
       return textResult(output);
     }
   );
@@ -222,7 +333,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ path, param, value }) => {
-      const output = await runCli("param", "set", path, param, value);
+      const output = await withAutoSetup(() => runCli("param", "set", path, param, value));
       return textResult(output);
     }
   );
@@ -246,7 +357,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ script }) => {
-      const output = await runCli("exec", script);
+      const output = await withAutoSetup(() => runCli("exec", script));
       return textResult(output);
     }
   );

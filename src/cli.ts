@@ -1,33 +1,6 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
-
-const MCP_DIR = join(homedir(), ".touchdesigner-mcp");
-const SETTINGS_PATH = join(MCP_DIR, "settings.json");
-const CLI_DIR = join(MCP_DIR, "cli");
-const CLI_ENTRY = join("src", "index.ts");
-const REPO_URL = "https://github.com/michaelslain/touchdesigner-cli.git";
 
 let cliPromise: Promise<string> | null = null;
-
-interface Settings {
-  cliPath?: string;
-}
-
-function readSettings(): Settings {
-  if (!existsSync(SETTINGS_PATH)) return {};
-  try {
-    return JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"));
-  } catch {
-    return {};
-  }
-}
-
-function writeSettings(settings: Settings): void {
-  mkdirSync(MCP_DIR, { recursive: true });
-  writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
-}
 
 export function ensureCli(): Promise<string> {
   if (!cliPromise) cliPromise = resolveCliPath();
@@ -35,30 +8,17 @@ export function ensureCli(): Promise<string> {
 }
 
 async function resolveCliPath(): Promise<string> {
-  const settings = readSettings();
-
-  if (settings.cliPath && existsSync(join(settings.cliPath, CLI_ENTRY))) {
-    return settings.cliPath;
+  try {
+    return await exec("which", ["td"]);
+  } catch {
+    await exec("bun", ["install", "-g", "github:michaelslain/touchdesigner-cli"], { timeout: 120000 });
+    return await exec("which", ["td"]);
   }
-
-  mkdirSync(MCP_DIR, { recursive: true });
-
-  if (existsSync(CLI_DIR)) {
-    await exec("git", ["-C", CLI_DIR, "pull"], { timeout: 120000 });
-  } else {
-    await exec("git", ["clone", REPO_URL, CLI_DIR], { timeout: 120000 });
-  }
-
-  await exec("bun", ["install"], { cwd: CLI_DIR, timeout: 120000 });
-
-  writeSettings({ ...settings, cliPath: CLI_DIR });
-  return CLI_DIR;
 }
 
 export async function runCli(...args: string[]): Promise<string> {
-  const cliPath = await ensureCli();
-  const entryPoint = join(cliPath, CLI_ENTRY);
-  return await exec("bun", ["run", entryPoint, ...args]);
+  await ensureCli();
+  return await exec("td", args);
 }
 
 function exec(
