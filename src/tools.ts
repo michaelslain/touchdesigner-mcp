@@ -60,6 +60,63 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "td_save",
+    {
+      title: "Save TouchDesigner Project",
+      description: "Saves the current TouchDesigner project to its existing path.",
+    },
+    async () => {
+      const output = await withAutoSetup(() => runCli("exec", `
+project.save()
+result["output"] = "Saved " + project.name
+`));
+      return textResult(output);
+    }
+  );
+
+  server.registerTool(
+    "td_close",
+    {
+      title: "Close TouchDesigner",
+      description:
+        "Gracefully closes TouchDesigner. By default saves before closing. " +
+        "Set discard to true to close without saving.",
+      inputSchema: {
+        discard: z.boolean().optional().describe("Set true to close without saving (default: false, saves first)"),
+      },
+    },
+    async ({ discard }) => {
+      try {
+        await withAutoSetup(() => runCli("exec", `
+${discard ? '' : 'project.save()'}
+project.quit()
+result["output"] = "closing"
+`));
+      } catch {
+        // Expected — TD quits mid-response
+      }
+      return textResult(discard ? "TouchDesigner closed without saving." : "TouchDesigner saved and closed.");
+    }
+  );
+
+  server.registerTool(
+    "td_force_quit",
+    {
+      title: "Force Quit TouchDesigner",
+      description:
+        "Force-kills the TouchDesigner process. Use this when TD is frozen or unresponsive. " +
+        "Any unsaved changes will be lost.",
+    },
+    async () => {
+      const { execFile } = await import("node:child_process");
+      await new Promise<void>((resolve) => {
+        execFile("pkill", ["-9", "TouchDesigner"], { timeout: 5000 }, () => resolve());
+      });
+      return textResult("Force-quit TouchDesigner.");
+    }
+  );
+
+  server.registerTool(
     "td_project_create",
     {
       title: "Create TouchDesigner Project",
@@ -117,6 +174,58 @@ export function registerTools(server: McpServer): void {
       }
 
       return textResult(`Created and opened project: ${dest}\nWarning: server did not come online within 20s.`);
+    }
+  );
+
+  server.registerTool(
+    "td_project_info",
+    {
+      title: "Get Project Info",
+      description:
+        "Returns current project name, file path, frame rate, timeline position, and playback state.",
+    },
+    async () => {
+      const output = await withAutoSetup(() => runCli("exec", `
+tl = op('/project1')
+info = []
+info.append(f"Project: {project.name}")
+info.append(f"Path: {project.folder}")
+info.append(f"Cook Rate: {project.cookRate} FPS")
+info.append(f"Frame: {tl.time.frame}")
+info.append(f"Seconds: {tl.time.seconds:.2f}")
+info.append(f"Timeline: {tl.time.start} - {tl.time.end}")
+info.append(f"Play: {tl.time.play}")
+info.append(f"Loop: {tl.time.loop}")
+result["output"] = chr(10).join(info)
+`));
+      return textResult(output);
+    }
+  );
+
+  server.registerTool(
+    "td_import_tox",
+    {
+      title: "Import .tox Component",
+      description:
+        "Imports a .tox component file into a specified parent path. " +
+        ".tox files are reusable TouchDesigner components that can contain " +
+        "entire node networks. The imported component becomes a child of the parent.",
+      inputSchema: {
+        file: z.string().describe("Path to the .tox file, e.g. '/Users/me/components/myEffect.tox'"),
+        parent: z.string().describe("Parent path to import into, e.g. '/project1'"),
+        name: z.string().optional().describe("Optional name for the imported component"),
+      },
+    },
+    async ({ file, parent, name }) => {
+      const output = await withAutoSetup(() => runCli("exec", `
+p = op('${parent}')
+if p is None:
+    raise ValueError('Parent not found: ${parent}')
+n = p.loadTox('${file}')
+${name ? `n.name = '${name}'` : ''}
+result["output"] = f"Imported {n.path} ({n.type})"
+`));
+      return textResult(output);
     }
   );
 
@@ -274,6 +383,36 @@ result["output"] = "display on"
   );
 
   server.registerTool(
+    "td_node_wire",
+    {
+      title: "Wire Nodes to Specific Input",
+      description:
+        "Connects the output of a source node to a specific input index on the target node. " +
+        "Use this when you need to control which input slot a connection goes to — " +
+        "e.g. connecting to input 1 vs input 0 on a Composite TOP. " +
+        "Input indices are 0-based.",
+      inputSchema: {
+        source: z.string().describe("Source node path (output), e.g. '/project1/noise1'"),
+        target: z.string().describe("Target node path (input), e.g. '/project1/composite1'"),
+        inputIndex: z.number().min(0).describe("Target input index (0-based)"),
+      },
+    },
+    async ({ source, target, inputIndex }) => {
+      const output = await withAutoSetup(() => runCli("exec", `
+src = op('${source}')
+tgt = op('${target}')
+if src is None:
+    raise ValueError('Source not found: ${source}')
+if tgt is None:
+    raise ValueError('Target not found: ${target}')
+tgt.inputConnectors[${inputIndex}].connect(src)
+result["output"] = f"Wired {src.path} -> {tgt.path} input ${inputIndex}"
+`));
+      return textResult(output);
+    }
+  );
+
+  server.registerTool(
     "td_node_connect",
     {
       title: "Connect Nodes",
@@ -377,6 +516,34 @@ result["output"] = "display on"
   );
 
   server.registerTool(
+    "td_param_set_expr",
+    {
+      title: "Set Parameter Expression",
+      description:
+        "Sets a parameter to a Python expression that gets evaluated every frame. " +
+        "Use this for animations and dynamic values. " +
+        "Examples: 'absTime.seconds' (time-based), 'math.sin(absTime.seconds)*0.5' (oscillation), " +
+        "'op(\"noise1\").par.roughness' (reference another param), " +
+        "'me.time.frame / 100' (frame-based).",
+      inputSchema: {
+        path: z.string().describe("Node path, e.g. '/project1/noise1'"),
+        param: z.string().describe("Parameter name, e.g. 'tx', 'roughness'"),
+        expr: z.string().describe("Python expression, e.g. 'absTime.seconds * 2'"),
+      },
+    },
+    async ({ path, param, expr }) => {
+      const output = await withAutoSetup(() => runCli("exec", `
+n = op('${path}')
+if n is None:
+    raise ValueError('Node not found: ${path}')
+n.par.${param}.expr = '${expr.replace(/'/g, "\\'")}'
+result["output"] = f"Set {n.path}.par.${param}.expr = '${expr}'"
+`));
+      return textResult(output);
+    }
+  );
+
+  server.registerTool(
     "td_exec",
     {
       title: "Execute Python in TouchDesigner",
@@ -439,6 +606,77 @@ result["output"] = "saved"
       } catch {
         return textResult(`Screenshot saved but could not read file. Check if ${path} is a valid TOP with output.`);
       }
+    }
+  );
+
+  server.registerTool(
+    "td_video_preview",
+    {
+      title: "Preview TOP Video Output",
+      description:
+        "Captures multiple frames from a TOP node over time and returns them as images. " +
+        "Use this to see what an animated or time-varying TOP is producing — " +
+        "noise animations, video playback, generative effects, etc. " +
+        "Only works on TOP-family nodes.",
+      inputSchema: {
+        path: z.string().describe("Path to a TOP node, e.g. '/project1/render1'"),
+        frames: z.number().min(2).max(16).optional().describe("Number of frames to capture (default: 5, max: 16)"),
+        frameStep: z.number().min(1).optional().describe("Frames to advance between captures (default: 10)"),
+      },
+    },
+    async ({ path, frames = 5, frameStep = 10 }) => {
+      const prefix = `/tmp/td_vidpreview_${Date.now()}`;
+
+      await withAutoSetup(() => runCli("exec", `
+import time
+top = op('${path}')
+if top is None:
+    raise ValueError('Node not found: ${path}')
+if top.family != 'TOP':
+    raise ValueError('Not a TOP node: ${path} (family: ' + top.family + ')')
+
+tl = op('/project1')
+original_frame = tl.time.frame
+frames_to_capture = ${frames}
+step = ${frameStep}
+
+for i in range(frames_to_capture):
+    tl.time.frame = original_frame + (i * step)
+    top.cook(force=True)
+    top.save('${prefix}_' + str(i) + '.png')
+
+tl.time.frame = original_frame
+result["output"] = str(frames_to_capture)
+`));
+
+      const { unlinkSync } = await import("node:fs");
+      const content: { type: "image"; data: string; mimeType: "image/png" }[] = [];
+
+      for (let i = 0; i < frames; i++) {
+        const file = `${prefix}_${i}.png`;
+        try {
+          const data = readFileSync(file);
+          unlinkSync(file);
+          content.push({
+            type: "image" as const,
+            data: data.toString("base64"),
+            mimeType: "image/png",
+          });
+        } catch {
+          // frame didn't save, skip
+        }
+      }
+
+      if (content.length === 0) {
+        return textResult(`No frames captured. Check if ${path} is a valid TOP with output.`);
+      }
+
+      return {
+        content: [
+          { type: "text" as const, text: `Captured ${content.length} frames from ${path} (every ${frameStep} frames):` },
+          ...content,
+        ],
+      };
     }
   );
 
