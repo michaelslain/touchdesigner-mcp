@@ -102,7 +102,15 @@ Persistent directory used by cef for storing user data. Note that the directory 
 
 #### Modify Header DAT `headerdat`
 
-Modify request headers for a given url. Specify a table with columns Name, Value & URL. For a matching URL in the url columen, the corresponding name and value will be inserted into the request header map, replacing any existing values.
+Modify request headers for a given url. Specify a table with columns Name, Value & URL. For a matching URL in the url columen, the corresponding name and value will be inserted into the request header map, replacing any existing values. URLs can contain Pattern Matching.
+
+#### Allow URLs DAT `allowurls`
+
+Specify a table with a list of URLs that are allow to load. URLs can contain Pattern Matching.
+
+#### Block URLs DAT `blockurls`
+
+Specify a table with a list of URLs that will not be loaded. This parameter can be used to block URLs that are allowed via the Allow URLs Dat. URLs can contain Pattern Matching.
 
 #### Options `options`
 
