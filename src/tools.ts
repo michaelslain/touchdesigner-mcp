@@ -9,6 +9,11 @@ function textResult(output: string) {
   return { content: [{ type: "text" as const, text: output }] };
 }
 
+const NETWORK_CHANGED_MSG = "\nNetwork changed — call td_organize to keep the graph tidy.";
+const DISPLAY_OUTPUT_TYPES = new Set(
+  ["renderTOP", "compositeTOP", "outTOP", "nullTOP", "geometryCOMP"].map(t => t.toLowerCase())
+);
+
 async function withAutoSetup(fn: () => Promise<string>): Promise<string> {
   try {
     return await fn();
@@ -312,7 +317,10 @@ result["output"] = f"Imported {n.path} ({n.type})"
         "textDAT, tableDAT, executeDAT, " +
         "baseCOMP, containerCOMP, geometryCOMP, cameraCOMP, lightCOMP, " +
         "phongMAT, pbrMAT, wireframeMAT. " +
-        "Node types follow the pattern: <name><FAMILY> (e.g. noiseTOP, sphereSOP).",
+        "Node types follow the pattern: <name><FAMILY> (e.g. noiseTOP, sphereSOP). " +
+        "Auto-focuses display on the new node and turns it off on all siblings. " +
+        "Convention: only one node per parent should have display=True — the chain's " +
+        "terminal (the most-processed output, what the user actually wants to see).",
       inputSchema: {
         type: z.string().describe("Node type, e.g. 'textTOP', 'noiseCHOP', 'sphereSOP'"),
         parent: z.string().describe("Parent path where node is created, e.g. '/project1'"),
@@ -329,8 +337,18 @@ result["output"] = f"Imported {n.path} ({n.type})"
       if (pathMatch) {
         const nodePath = pathMatch[1];
 
-        // Auto-place: position to the right of siblings
+        // Auto-place and auto-display in a single call
         try {
+          const displayFocus = DISPLAY_OUTPUT_TYPES.has(type.toLowerCase())
+            ? `
+for child in n.parent().children:
+    if child is not n:
+        child.display = False
+        child.viewer = False
+n.display = True
+n.viewer = True
+`
+            : '';
           await runCli("exec", `
 n = op('${nodePath}')
 parent = n.parent()
@@ -343,22 +361,10 @@ if siblings:
 else:
     n.nodeX = 0
     n.nodeY = 0
-result["output"] = "placed"
+${displayFocus}
+result["output"] = "placed${displayFocus ? ' and display focused' : ''}"
 `);
         } catch {}
-
-        // Auto-display: activate viewer for output-type nodes
-        const displayTypes = ["renderTOP", "compositeTOP", "outTOP", "nullTOP", "geometryCOMP"];
-        if (displayTypes.some(t => type.toLowerCase() === t.toLowerCase())) {
-          try {
-            await runCli("exec", `
-n = op('${nodePath}')
-n.display = True
-n.viewer = True
-result["output"] = "display on"
-`);
-          } catch {}
-        }
       }
 
       return textResult(output);
@@ -408,7 +414,7 @@ if tgt is None:
 tgt.inputConnectors[${inputIndex}].connect(src)
 result["output"] = f"Wired {src.path} -> {tgt.path} input ${inputIndex}"
 `));
-      return textResult(output);
+      return textResult(output + NETWORK_CHANGED_MSG);
     }
   );
 
@@ -429,7 +435,7 @@ result["output"] = f"Wired {src.path} -> {tgt.path} input ${inputIndex}"
     },
     async ({ source, target }) => {
       const output = await withAutoSetup(() => runCli("node", "connect", source, target));
-      return textResult(output);
+      return textResult(output + NETWORK_CHANGED_MSG);
     }
   );
 
@@ -446,6 +452,142 @@ result["output"] = f"Wired {src.path} -> {tgt.path} input ${inputIndex}"
     },
     async ({ source, target }) => {
       const output = await withAutoSetup(() => runCli("node", "disconnect", source, target));
+      return textResult(output + NETWORK_CHANGED_MSG);
+    }
+  );
+
+  server.registerTool(
+    "td_organize",
+    {
+      title: "Organize Node Layout",
+      description:
+        "Re-organizes nodes in a container into a left-to-right tree layout based on " +
+        "connection topology. Sources go on the left, leaves on the right. " +
+        "Disconnected (orphan) nodes are stacked in a column far to the left, separated " +
+        "from the main graph. Cheap and idempotent. " +
+        "Call this after wiring nodes or whenever the network gets messy.",
+      inputSchema: {
+        path: z
+          .string()
+          .optional()
+          .describe("Container path to organize (default: '/project1')"),
+        recursive: z
+          .boolean()
+          .optional()
+          .describe("Recurse into child COMPs (default: true)"),
+      },
+    },
+    async ({ path, recursive }) => {
+      const target = path ?? "/project1";
+      const recurse = recursive !== false;
+      const output = await withAutoSetup(() => runCli("exec", `
+import collections
+
+ROOT = '${target}'
+RECURSIVE = ${recurse ? "True" : "False"}
+COL_SPACING = 200
+ROW_SPACING = 150
+ORPHAN_BUFFER = 400
+
+stats = {'organized': 0, 'orphans': 0, 'comps': 0}
+
+def organize(parent_path):
+    parent = op(parent_path)
+    if parent is None:
+        return
+    children = list(parent.children)
+    if not children:
+        return
+
+    by_name = {c.name: c for c in children}
+    child_set = set(by_name.keys())
+
+    inputs = {c.name: [] for c in children}
+    has_output = {c.name: False for c in children}
+    for c in children:
+        try:
+            connectors = c.inputConnectors
+        except Exception:
+            connectors = []
+        for conn in connectors:
+            for connected in conn.connections:
+                src = connected.owner
+                if src.name in child_set:
+                    inputs[c.name].append(src.name)
+                    has_output[src.name] = True
+
+    connected = [c.name for c in children if inputs[c.name] or has_output[c.name]]
+    orphans = [c.name for c in children if not inputs[c.name] and not has_output[c.name]]
+
+    column = {}
+    visiting = set()
+    def get_col(name):
+        if name in column:
+            return column[name]
+        if name in visiting:
+            return 0
+        visiting.add(name)
+        parents = [p for p in inputs[name] if p not in visiting]
+        if not parents:
+            col = 0
+        else:
+            col = max(get_col(p) for p in parents) + 1
+        visiting.discard(name)
+        column[name] = col
+        return col
+
+    for name in connected:
+        get_col(name)
+
+    cols = collections.defaultdict(list)
+    for name in connected:
+        cols[column[name]].append(name)
+
+    row = {}
+    for col_idx in sorted(cols.keys()):
+        names = cols[col_idx]
+        if col_idx == 0:
+            names.sort()
+        else:
+            def bary(n):
+                rows = [row[p] for p in inputs[n] if p in row]
+                return sum(rows) / len(rows) if rows else 0
+            names.sort(key=bary)
+        for r, name in enumerate(names):
+            row[name] = r
+
+    for name in connected:
+        n = by_name[name]
+        n.nodeX = column[name] * COL_SPACING
+        n.nodeY = -row[name] * ROW_SPACING
+
+    orphan_x = -(2 * COL_SPACING + ORPHAN_BUFFER)
+    for r, name in enumerate(sorted(orphans)):
+        n = by_name[name]
+        n.nodeX = orphan_x
+        n.nodeY = -r * ROW_SPACING
+
+    stats['organized'] += len(connected) + len(orphans)
+    stats['orphans'] += len(orphans)
+
+    if RECURSIVE:
+        for c in children:
+            if c.family == 'COMP':
+                stats['comps'] += 1
+                organize(c.path)
+
+organize(ROOT)
+
+if stats['organized'] == 0:
+    result["output"] = f"No nodes to organize in {ROOT}."
+else:
+    parts = [f"Organized {stats['organized']} nodes in {ROOT}"]
+    if stats['orphans']:
+        parts.append(f"({stats['orphans']} orphans)")
+    if stats['comps']:
+        parts.append(f"recursed into {stats['comps']} child COMP(s)")
+    result["output"] = " ".join(parts) + "."
+`));
       return textResult(output);
     }
   );
@@ -502,7 +644,10 @@ result["output"] = f"Wired {src.path} -> {tgt.path} input ${inputIndex}"
         "numbers become numeric, 'true'/'false' become boolean, " +
         "everything else stays as a string. Common params: " +
         "'text' (textTOP), 'file' (moviefileinTOP), 'resolutionw'/'resolutionh' (TOPs), " +
-        "'tx'/'ty'/'tz' (transforms), 'rx'/'ry'/'rz' (rotations).",
+        "'tx'/'ty'/'tz' (transforms), 'rx'/'ry'/'rz' (rotations). " +
+        "When setting 'display' or 'viewer' to true, sibling displays are automatically " +
+        "turned off to enforce the single-display convention — only one node per parent " +
+        "should be displayed (the chain's terminal output).",
       inputSchema: {
         path: z.string().describe("Node path, e.g. '/project1/text1'"),
         param: z.string().describe("Parameter name, e.g. 'text'"),
@@ -510,7 +655,24 @@ result["output"] = f"Wired {src.path} -> {tgt.path} input ${inputIndex}"
       },
     },
     async ({ path, param, value }) => {
-      const output = await withAutoSetup(() => runCli("param", "set", path, param, value));
+      let output = await withAutoSetup(() => runCli("param", "set", path, param, value));
+
+      // When setting display or viewer to true, enforce single-display convention
+      if ((param === "display" || param === "viewer") && value.toLowerCase() === "true") {
+        try {
+          await withAutoSetup(() => runCli("exec", `
+n = op('${path}')
+parent = n.parent()
+for child in parent.children:
+    if child is not n:
+        child.display = False
+        child.viewer = False
+n.${param} = True
+result["output"] = "siblings disabled"
+`));
+        } catch {}
+      }
+
       return textResult(output);
     }
   );
