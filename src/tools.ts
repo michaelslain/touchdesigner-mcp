@@ -779,18 +779,19 @@ result["output"] = "saved"
         "Captures multiple frames from a TOP node over time and returns them as images. " +
         "Use this to see what an animated or time-varying TOP is producing — " +
         "noise animations, video playback, generative effects, etc. " +
-        "Only works on TOP-family nodes.",
+        "Only works on TOP-family nodes. " +
+        "Total frames captured = duration × framerate, capped at 16.",
       inputSchema: {
         path: z.string().describe("Path to a TOP node, e.g. '/project1/render1'"),
-        frames: z.number().min(2).max(16).optional().describe("Number of frames to capture (default: 5, max: 16)"),
-        frameStep: z.number().min(1).optional().describe("Frames to advance between captures (default: 10)"),
+        duration: z.number().min(0.1).optional().describe("Duration in seconds to capture (default: 1)"),
+        framerate: z.number().min(1).optional().describe("Frames per second to sample (default: 5)"),
       },
     },
-    async ({ path, frames = 5, frameStep = 10 }) => {
+    async ({ path, duration = 1, framerate = 5 }) => {
       const prefix = `/tmp/td_vidpreview_${Date.now()}`;
+      const frames = Math.min(16, Math.max(2, Math.round(duration * framerate)));
 
       await withAutoSetup(() => runCli("exec", `
-import time
 top = op('${path}')
 if top is None:
     raise ValueError('Node not found: ${path}')
@@ -798,9 +799,10 @@ if top.family != 'TOP':
     raise ValueError('Not a TOP node: ${path} (family: ' + top.family + ')')
 
 tl = op('/project1')
+project_fps = tl.time.rate
 original_frame = tl.time.frame
 frames_to_capture = ${frames}
-step = ${frameStep}
+step = max(1, round(project_fps / ${framerate}))
 
 for i in range(frames_to_capture):
     tl.time.frame = original_frame + (i * step)
@@ -835,7 +837,7 @@ result["output"] = str(frames_to_capture)
 
       return {
         content: [
-          { type: "text" as const, text: `Captured ${content.length} frames from ${path} (every ${frameStep} frames):` },
+          { type: "text" as const, text: `Captured ${content.length} frames from ${path} (${duration}s @ ${framerate}fps):` },
           ...content,
         ],
       };
