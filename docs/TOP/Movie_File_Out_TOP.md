@@ -317,7 +317,7 @@ Adds metadata to the file to denote that it contains a spherical 360 degree rend
 
 #### Secondary Compression `secondarycompression`
 
-Hap uses a secondary CPU compression stage usually. Encoding video without this compression will result in faster playback, but potentially larger file sizes (which would require faster drives to play back).
+Codecs such as Hap and NotchLC have both a lossy GPU compression, and a lossless secondary CPU compression stage that is done to the GPU-compressed data. Encoding video without this secondary compression will result in faster decompression (since no CPU decompression is required), but larger file sizes (which would require faster drives to play back).
 
 #### Encode Test Mode `encodetestmode`
 
