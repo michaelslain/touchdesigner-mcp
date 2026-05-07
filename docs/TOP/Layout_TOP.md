@@ -45,13 +45,35 @@ Determines how the input images are fit to the space they are given. Depending o
 - **Fit Outside** `fitoutside`
 - **Native Resolution** `nativeres`
 
-#### Max Rows `maxrows`
+#### Row Layout `rowlayout`
 
-Maximum number of rows until a new column is started.
+Sets the layout configuration for the rows.
 
-#### Max Columns `maxcols`
+- **Max** `max` - Maximum number of rows until a new column is started.
+- **Exact** `exact` - Exact number of rows.
 
-Maximum number of columns until a new row is started.
+#### Number of Rows `numrows`
+
+Sets the number of rows based on the selected 'Row Layout'.
+
+#### Reverse Row Order `reverserows`
+
+Reverses the direction of the rows.
+
+#### Column Layout `collayout`
+
+Sets the layout configuration for the columns.
+
+- **Max** `max` - Maximum number of columns until a new row is started.
+- **Exact** `exact` - Exact number of columns.
+
+#### Number of Columns `numcols`
+
+Sets the number of columns based on the selected 'Column Layout'.
+
+#### Reverse Column Order `reversecols`
+
+Reverses the direction of the columns.
 
 #### Border Color `bcolor`
 

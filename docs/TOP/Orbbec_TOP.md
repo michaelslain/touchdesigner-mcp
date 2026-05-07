@@ -41,6 +41,28 @@ Use this parameter to select the serial number of the camera you wish to connect
 
 The IP address of the camera to connect to.
 
+#### Log to Console `logconsole`
+
+Sets the log level to output to the console.
+
+- **Off** `off` - Off (close logs).
+- **Debug** `debug` - Debug.
+- **Info** `info` - Information.
+- **Warn** `warn` - Warnings.
+- **Error** `error` - Errors.
+- **Fatal** `fatal` - Fatal errors.
+
+#### Log to File `logfile`
+
+Sets the log level to output to the log file.
+
+- **Off** `off` - Off (close logs).
+- **Debug** `debug` - Debug.
+- **Info** `info` - Information.
+- **Warn** `warn` - Warnings.
+- **Error** `error` - Errors.
+- **Fatal** `fatal` - Fatal errors.
+
 #### Color Resolution `colorres`
 
 Select the resolution of the sensor's color camera. Every camera has a default resolution that it will use automatically. Additional options will appear in the menu depending on the camera model. Not all frame rates (FPS) will be available for all camera resolutions.
