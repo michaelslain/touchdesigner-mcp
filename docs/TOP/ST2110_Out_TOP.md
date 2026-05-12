@@ -4,7 +4,7 @@
 
 ## Summary
 
-Support for Blackmagic IP range and Deltacast DELTA-ip-ST2110 devices.
+Support for Blackmagic, AJA and Deltacast ST2110 devices.
 
 To obtain the SDPs generated for the output essences, use an Info DAT and choose which SDP to obtain.
 

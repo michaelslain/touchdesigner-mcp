@@ -4,7 +4,7 @@
 
 ## Summary
 
-Support for Blackmagic IP range and Deltacast DELTA-ip-ST2110 devices.
+Support for Blackmagic IP range, AJA IP25 and Deltacast DELTA-ip-ST2110 devices.
 
 See also ST2110 Out TOP, ST2110 Device CHOP.
 

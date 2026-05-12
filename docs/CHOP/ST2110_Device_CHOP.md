@@ -24,6 +24,7 @@ Select which device driver to use to search and communicate with devices.
 
 - **Blackmagic** `blackmagic` - Use the Blackmagic driver.
 - **Deltacast** `deltacast` - Use the Deltacast driver.
+- **AJA** `aja` - Use the AJA driver.
 
 #### Device `device`
 
