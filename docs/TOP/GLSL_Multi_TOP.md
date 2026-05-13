@@ -295,7 +295,7 @@ Format used to store data for each channel in the image (ie. R, G, B, and A). Re
 
 #### Parameter Color Space `parmcolorspace`
 
-Controls how all color parameters on this node are interpreted. The color values as treated as being in the selected color space, and are converted to the Working Color Space before they are used as part of the node's operation. Note that this does not change the color space of the node itself, as that is always in the Working Color Space.
+Controls how all color parameters on this node are interpreted. Only available when a Working Color Space is active for the project. The color values as treated as being in the selected color space, and are converted to the Working Color Space before they are used as part of the node's operation. Note that this does not change the color space of the node itself, as that is always in the Working Color Space.
 
 - **sRGB** `srgb` - sRGB color space, with sRGB transfer function. Considered an SDR color space with respect to Reference White.
 - **sRGB - Linear** `srgblinear` - sRGB color space, with linear transfer function. Considered an SDR color space with respect to Reference White.
