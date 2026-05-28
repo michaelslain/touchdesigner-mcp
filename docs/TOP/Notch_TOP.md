@@ -18,6 +18,8 @@ Exposed block properties will be added as parameters on the Notch TOP. Each para
 
 Most parameters translate easily to TouchDesigner's parameter configuration, but some may require additional context, which is appended to the parameter label in parentheses:
 
+Subregion rendering is available for certain blocks (compiled with at least Notch version 1.0) through the Crop page of the Notch TOP.
+
 See also: Notch
 
 > **Note:** CodeMeter Runtime v7.60+ is now required to load Notch blocks.
@@ -81,6 +83,32 @@ Sets the units used in the Index parameter.
 #### Purge GPU Mem `purge`
 
 Purge Video RAM used by the block.
+
+### Crop Page
+
+#### Crop `crop`
+
+Enable cropping (ie. Subregion Rendering) on the Notch Block. The resolution of the TOP will remain unchanged, and will be used with the crop parameters to derive the full canvas width and height.
+
+#### Crop Left `cropleft`
+
+The left crop border as a percentage of the overall resolution. The canvas width will be resolution width multiplied by the difference between crop right and left.
+
+#### Crop Right `cropright`
+
+The right crop border as a percentage of the overall resolution. The canvas width will be resolution width multiplied by the difference between crop right and left.
+
+#### Crop Bottom `cropbottom`
+
+The bottom crop border as a percentage of the overall resolution. The canvas height will be resolution height multiplied by the difference between crop top and bottom.
+
+#### Crop Top `croptop`
+
+The top crop border as a percentage of the overall resolution. The canvas height will be resolution height multiplied by the difference between crop top and bottom.
+
+#### Overdraw `overdraw`
+
+Overdraw allows for expansion of the rendered area beyond the requested region boundary. This is important for post-effects such as blur or glow that are computed regionally. Without overdraw, regions would show hard seams at their edges where the effect has insufficient context. Overdraw is also known as overscan.
 
 ### Common Page
 
