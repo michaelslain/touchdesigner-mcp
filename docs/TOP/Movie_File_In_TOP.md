@@ -226,8 +226,10 @@ When the file can not be loaded for some reason, select what to display instead.
 
 #### Decode Pixel Format `decodepixelformat`
 
-- **Fastest** `fastest`
-- **Best** `best`
+Although a video/image may be encoded with a certain bit-depth (8, 10, 12-bit etc.), it's not always required to consume that data at it's encoded depth. If your output is a 8-bit display and you arn't doing a lot of processing on the data, then it may may sense to just decode it into a 8-bit buffer. This saves both GPU cycles for processing, and GPU memory. This menu lets you specify if you prefer to get the fastest pixel format out of the decode, or the best/highest quality. If the format is encoded in 8-bit, then 8-bit will be encoded in both cases.
+
+- **Fastest** `fastest` - The fastest (lowest bit depth) pixel format the codec can be decoded into. Usually 8-bit fixed.
+- **Best** `best` - The best (highest bit depth) pixel format the codec can be decoded into, without going higher than what it's encoded as. For codecs that are 8-bit, this will still cause 8-bit to be output. For codecs that are 10-bit or 12-bit, then a 16-bit fixed pixel format output will be used (since GPUs can't do 12-bit, and 10-bit doesn't have a high precision Alpha channel.
 
 ### Trim Page
 
