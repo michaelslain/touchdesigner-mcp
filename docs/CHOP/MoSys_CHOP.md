@@ -31,7 +31,7 @@ The port which MoSys CHOP will accept packets on.
 
 #### Local Address `localaddress`
 
-Specify an IP address to receive on, useful when the system has mulitple NICs (Network Interface Card) and you want to select which one to use.
+Specify an IP address to receive on, useful when the system has multiple NICs (Network Interface Card) and you want to select which one to use.
 
 #### Camera ID `cameraid`
 

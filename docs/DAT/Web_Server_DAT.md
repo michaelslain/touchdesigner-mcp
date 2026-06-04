@@ -32,6 +32,16 @@ When the server is active, pulsing will restart it.
 
 The web server's connection port. Eg. If the port number is 9980, the web server can be connected to locally (via a web browser) at the address "localhost:9980".
 
+#### Local Address `localaddress`
+
+Specify an IP address to listen on, useful when the system has multiple NICs (Network Interface Card) and you want to select which one to use. When left blank, the Web Server DAT will listen on all interfaces.
+
+#### Callbacks DAT `callbacks`
+
+A reference to a DAT with python callbacks. The Web Server DAT relies heavily on the Callbacks DAT, and in fact most functionality passes through the callbacks. onHTTPRequest - Triggered when the web server receives an HTTP request. The request is a dictionary of HTTP headers. Similarly, response is a dictionary of response data such as status and reason. Additional key/value pairs can be added to the response dictionary that will be added as headers in the HTTP response. The response server must be returned from the callback. This response will be sent back to the client. onWebSocketOpen - Triggered when a WebSocket connection is opened with a client. The client address is passed to the callback. onWebSocketClose - Triggered when a WebSocket connection is closed. The client address is passed to the callback. onWebSocketReceiveText - Triggered when the server's WebSocket connection receives text data from a client. The client that sent the text data is passed through to the callback. onWebSocketReceiveBinary - Triggered when the server's WebSocket connection receives binary data from a client. The client that sent the binary data is passed through to the callback. onServerStart - Triggered when the server starts.
+
+### Secure Page
+
 #### Secure (TLS) `secure`
 
 When enabled, the web server will use transport layer security (TLS) to create secure connections with clients. As a result, the web server will run through HTTPS instead of HTTP.
@@ -48,9 +58,18 @@ The path to the certificate file of the server's TLS certificate.
 
 The password for the certificate specified above. The password is only visually hidden and can still be accessed via python. In order to protect it and encrypt it when the project is saved, the Web Server DAT should be put in a private component.
 
-#### Callbacks DAT `callbacks`
+#### Secure (TLS) `Verify Client`
 
-A reference to a DAT with python callbacks. The Web Server DAT relies heavily on the Callbacks DAT, and in fact most functionality passes through the callbacks. onHTTPRequest - Triggered when the web server receives an HTTP request. The request is a dictionary of HTTP headers. Similarly, response is a dictionary of response data such as status and reason. Additional key/value pairs can be added to the response dictionary that will be added as headers in the HTTP response. The response server must be returned from the callback. This response will be sent back to the client. onWebSocketOpen - Triggered when a WebSocket connection is opened with a client. The client address is passed to the callback. onWebSocketClose - Triggered when a WebSocket connection is closed. The client address is passed to the callback. onWebSocketReceiveText - Triggered when the server's WebSocket connection receives text data from a client. The client that sent the text data is passed through to the callback. onWebSocketReceiveBinary - Triggered when the server's WebSocket connection receives binary data from a client. The client that sent the binary data is passed through to the callback. onServerStart - Triggered when the server starts.
+Enables Mutual TLS (mTLS) for the Server, requiring verification/authentication of the client certificate to complete the TLS handshake.
+
+#### Minimum TLS Protocol `minprotocol`
+
+Specify the minimum TLS protocol accept by the server. Clients that do not meet the minimum version requirement will be rejected.
+
+- **TLS v1.0** `tlsv10`
+- **TLS v1.1** `tlsv11`
+- **TLS v1.2** `tlsv12`
+- **TLS v1.3** `tlsv13`
 
 ### Common Page
 

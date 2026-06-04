@@ -20,6 +20,10 @@ NOTE for Windows OS - If experiencing connection issues make sure Windows Firewa
 
 ### Connect Page
 
+#### Active `active`
+
+This check box enables the connection.
+
 #### Connection Mode `mode`
 
 Specify if this operator is communicating as a client or a server.
@@ -47,9 +51,9 @@ Determines how the incoming data is parsed into the table.
 - **One Per Line** `perline` - One row is added to the table per line received. The end of a line is delimited by \n, \r or a null character (\0). Note: In this format messages will not be logged until one of those characters are received.
 - **One For All Received Data** `all` - One row is added to the table per message received. Since TCP/IP is a stream-based protocol, the end of a 'message' is arbitrary. It is simply the contents of the last read operation from the socket. If you are reading a custom message format, you'll likely need to build up a full message from multiple reads from the socket in Python.
 
-#### Active `active`
+#### Local Address `localaddress`
 
-This check box enables the connection.
+Specify an IP address to listen on when in server mode, useful when the system has multiple NICs (Network Interface Card) and you want to select which one to use. When left blank, the TCP/IP DAT will listen on all interfaces.
 
 ### Received Data Page
 

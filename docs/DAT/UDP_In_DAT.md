@@ -14,6 +14,10 @@ NOTE for Windows OS - If experiencing connection issues make sure Windows Firewa
 
 ### Connect Page
 
+#### Active `active`
+
+This check box enables the connection.
+
 #### Protocol `protocol`
 
 Select which protocol to use, refer to the Network Protocols article for more information.
@@ -41,9 +45,9 @@ Determines how the incoming data is parsed.
 - **One Per Line** `perline` - One row is added to the table per line received. The end of a line is delimited by \n, \r or a null character (\0).
 - **One Per Message** `permessage` - One row is added to the table per message received.
 
-#### Active `active`
+#### Local Address `localaddress`
 
-This check box enables the connection.
+Specify an IP address to listen on, useful when the system has multiple NICs (Network Interface Card) and you want to select which one to use. When left blank, the UDP In DAT will listen on all interfaces.
 
 ### Received Data Page
 
